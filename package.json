@@ -1,0 +1,10 @@
+{
+  "name": "f97.xyz",
+  "type": "module",
+  "scripts": {
+    "build:dns": "hostlist-compiler -c ./dns/config.json -o ./dns/dns-filters.txt"
+  },
+  "devDependencies": {
+    "@adguard/hostlist-compiler": "^1.0.29"
+  }
+}

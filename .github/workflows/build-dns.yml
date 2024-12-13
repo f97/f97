@@ -1,0 +1,25 @@
+name: ✨
+
+on:
+  schedule:
+    - cron: '15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: ⚡
+        run: |
+          bun install
+          bun build:dns
+      - name: 🚀
+        uses: exuanbo/actions-deploy-gist@v1
+        with:
+          token: ${{ secrets.GIST_TOKEN }}
+          gist_id: 535d0fb16d7837365eb488c45f79a846
+          file_path: dns/dns-filters.txt
