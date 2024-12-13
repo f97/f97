@@ -75,8 +75,8 @@
       ]
     },
     {
-      "name": "HaGeZi's Ultimate Blocklist",
-      "source": "https://adguardteam.github.io/HostlistsRegistry/assets/filter_49.txt",
+      "name": "1Hosts Lite",
+      "source": "https://raw.githubusercontent.com/badmojr/1Hosts/master/Lite/domains.wildcards",
       "type": "adblock",
       "transformations": [
         "RemoveComments",
