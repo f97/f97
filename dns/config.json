@@ -153,26 +153,6 @@
         "Validate"
       ]
     },
-    {
-      "name": "GoodbyeAds",
-      "source": "https://raw.githubusercontent.com/jerryn70/GoodbyeAds/master/Hosts/GoodbyeAds.txt",
-      "type": "adblock",
-      "transformations": [
-        "RemoveComments",
-        "Compress",
-        "Validate"
-      ]
-    },
-    {
-      "name": "GoodbyeAds-Spotify",
-      "source": "https://raw.githubusercontent.com/jerryn70/GoodbyeAds/master/Extension/GoodbyeAds-Spotify-AdBlock.txt",
-      "type": "adblock",
-      "transformations": [
-        "RemoveComments",
-        "Compress",
-        "Validate"
-      ]
-    }
   ],
   "transformations": [
     "RemoveComments",
