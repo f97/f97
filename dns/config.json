@@ -206,6 +206,25 @@
         "Compress",
         "Validate"
       ]
+    },
+    {
+      "name": "Lighswitch05: tracking-aggressive-extended",
+      "source": "https://www.github.developerdan.com/hosts/lists/tracking-aggressive-extended.txt",
+      "type": "hosts",
+      "transformations": [
+        "RemoveComments",
+        "Validate"
+      ]
+    },
+    {
+      "name": "Lighswitch05: ads-and-tracking-extended",
+      "source": "https://www.github.developerdan.com/hosts/lists/ads-and-tracking-extended.txt",
+      "type": "adblock",
+      "transformations": [
+        "RemoveComments",
+        "Compress",
+        "Validate"
+      ]
     }
   ],
   "transformations": [
