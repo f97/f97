@@ -1,0 +1,120 @@
+name: Daily GitHub → Dropbox
+
+on:
+  workflow_dispatch:          # chạy tay khi cần
+  schedule:
+    - cron: "15 19 * * *"     # chạy mỗi ngày 02:15 ICT (UTC+7)
+
+permissions:
+  contents: read
+
+env:
+  # Danh sách owner cần backup: user + org, cách nhau dấu phẩy
+  OWNERS: f97
+
+  # Bộ lọc
+  INCLUDE_FORKS: "true"      # đặt "true" nếu muốn backup cả fork
+  INCLUDE_ARCHIVED: "true"   # đặt "true" nếu muốn backup repo archived
+  ONLY_PRIVATE: "false"       # đặt "true" nếu CHỈ backup repo private
+  WITH_LFS: "true"            # fetch Git LFS (nặng—tắt nếu không cần)
+
+  # Đích trên Google Drive (remote:path). Remote name phải trùng trong rclone.conf
+  DRIVE_DEST: db:2025/Github
+
+  # Đường dẫn file cấu hình rclone tạm thời
+  RCLONE_CONFIG_FILE: ${{ runner.temp }}/rclone.conf
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Chuẩn bị công cụ
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq git git-lfs rclone
+          git lfs install
+
+      - name: Viết rclone.conf từ Secrets
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+        run: |
+          test -n "$RCLONE_CONF" || { echo "Thiếu secrets.RCLONE_CONF"; exit 1; }
+          echo "$RCLONE_CONF" > "$RCLONE_CONFIG_FILE"
+          echo "Rclone config written."
+
+      - name: Backup tất cả repo về local mirror và sync lên Drive
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}     # PAT có scope: repo, read:org
+        run: |
+          set -euo pipefail
+          test -n "${GH_PAT:-}" || { echo "Thiếu secrets.GH_PAT"; exit 1; }
+          echo "::add-mask::$GH_PAT"
+
+          MIRROR_ROOT="$GITHUB_WORKSPACE/mirror"
+          mkdir -p "$MIRROR_ROOT"
+
+          IFS=',' read -ra owners <<< "$OWNERS"
+
+          # Hàm gọi GitHub API & phân trang
+          gh_api() { # $1 = owner
+            local o="$1"
+            local otype
+            otype=$(curl -fsSL -H "Authorization: token $GH_PAT" "https://api.github.com/users/$o" | jq -r .type)
+            local base
+            if [[ "$otype" == "Organization" ]]; then
+              base="https://api.github.com/orgs/$o/repos"
+            else
+              base="https://api.github.com/users/$o/repos"
+            fi
+            local page=1
+            while :; do
+              local url="${base}?per_page=100&type=all&page=${page}"
+              data=$(curl -fsSL -H "Authorization: token $GH_PAT" "$url")
+              [[ "$(jq 'length' <<<"$data")" -eq 0 ]] && break
+              jq -c '.[]' <<<"$data"
+              ((page++))
+            done
+          }
+
+          for owner in "${owners[@]}"; do
+            echo "==> Owner: $owner"
+            gh_api "$owner" | jq -r --argjson incFork "$INCLUDE_FORKS" \
+                                 --argjson incArch "$INCLUDE_ARCHIVED" \
+                                 --argjson onlyPriv "$ONLY_PRIVATE" '
+              select(($incFork==true) or (.fork|not)) |
+              select(($incArch==true) or (.archived|not)) |
+              select(($onlyPriv!=true) or (.private==true)) |
+              [.name, .clone_url, .owner.login] | @tsv
+            ' | while IFS=$'\t' read -r name clone_url login; do
+              repo_dir="$MIRROR_ROOT/$login/${name}.git"
+              mkdir -p "$(dirname "$repo_dir")"
+              # Dùng PAT trong URL để clone private repo
+              auth_url="${clone_url/https:\/\//https:\/\/${GH_PAT}@}"
+
+              if [[ ! -d "$repo_dir" ]]; then
+                echo "  [+] clone --mirror $login/$name"
+                git clone --mirror --quiet "$auth_url" "$repo_dir"
+              else
+                echo "  [~] fetch $login/$name"
+                git -C "$repo_dir" remote set-url origin "$auth_url" || true
+                git -C "$repo_dir" fetch --all --prune --tags --quiet
+              fi
+
+              if [[ "${WITH_LFS}" == "true" ]]; then
+                git -C "$repo_dir" lfs fetch --all || true
+              fi
+              git -C "$repo_dir" repack -Ad >/dev/null 2>&1 || true
+              git -C "$repo_dir" gc --prune=now >/dev/null 2>&1 || true
+            done
+          done
+
+          export RCLONE_CONFIG="$RCLONE_CONFIG_FILE"
+          STAMP="$(date -u +%F-%H%M%S)"
+          rclone sync "$MIRROR_ROOT" "${DRIVE_DEST}/current" \
+            --backup-dir "${DRIVE_DEST}/versions/${STAMP}" \
+            --fast-list --checkers=32 --transfers=16 --checksum --delete-excluded --verbose
+
+      - name: Dọn dẹp
+        if: always()
+        run: rm -f "$RCLONE_CONFIG_FILE"
