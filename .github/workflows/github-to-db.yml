@@ -12,8 +12,8 @@ env:
   # Chủ thể cần backup: user hoặc org, ngăn cách bởi dấu phẩy
   OWNERS: f97
   # Bộ lọc
-  INCLUDE_FORKS: "false"
-  INCLUDE_ARCHIVED: "false"
+  INCLUDE_FORKS: "true"
+  INCLUDE_ARCHIVED: "true"
   ONLY_PRIVATE: "false"
   # Đích Dropbox (remote:path) — remote name phải trùng trong rclone.conf
   DROPBOX_DEST: db:2025/Github
@@ -100,7 +100,7 @@ jobs:
 
           # Upload lên Dropbox theo ngày, giữ lịch sử từng ngày
           export RCLONE_CONFIG="${RCLONE_CONFIG_FILE:?}"
-          rclone copy "$ZIP_ROOT" "${DROPBOX_DEST}/daily/${DATE}" \
+          rclone copy "$ZIP_ROOT" "${DROPBOX_DEST}/${DATE}" \
             --fast-list --checkers=32 --transfers=16 --verbose
 
       - name: Dọn dẹp
