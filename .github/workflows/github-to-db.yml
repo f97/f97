@@ -10,7 +10,7 @@ permissions:
 
 env:
   # Chủ thể cần backup: user hoặc org, ngăn cách bởi dấu phẩy
-  OWNERS: f97,gh-jsr,1truyen,taive-org
+  OWNERS: f97,1truyen,taive-org
   # Bộ lọc
   INCLUDE_FORKS: "true"
   INCLUDE_ARCHIVED: "true"
