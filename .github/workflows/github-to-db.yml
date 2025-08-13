@@ -1,28 +1,20 @@
 name: Daily GitHub → Dropbox
 
 on:
-  workflow_dispatch:          # chạy tay khi cần
+  workflow_dispatch:
   schedule:
-    - cron: "15 19 * * *"     # chạy mỗi ngày 02:15 ICT (UTC+7)
+    - cron: "15 19 * * *"   # 02:15 ICT hằng ngày (UTC+7)
 
 permissions:
   contents: read
 
 env:
-  # Danh sách owner cần backup: user + org, cách nhau dấu phẩy
-  OWNERS: f97
-
-  # Bộ lọc
-  INCLUDE_FORKS: "true"      # đặt "true" nếu muốn backup cả fork
-  INCLUDE_ARCHIVED: "true"   # đặt "true" nếu muốn backup repo archived
-  ONLY_PRIVATE: "false"       # đặt "true" nếu CHỈ backup repo private
-  WITH_LFS: "true"            # fetch Git LFS (nặng—tắt nếu không cần)
-
-  # Đích trên Google Drive (remote:path). Remote name phải trùng trong rclone.conf
+  OWNERS: your-github-username,your-org-1,your-org-2
+  INCLUDE_FORKS: "false"
+  INCLUDE_ARCHIVED: "false"
+  ONLY_PRIVATE: "false"
+  WITH_LFS: "true"
   DRIVE_DEST: db:2025/Github
-
-  # Đường dẫn file cấu hình rclone tạm thời
-  RCLONE_CONFIG_FILE: ${{ runner.temp }}/rclone.conf
 
 jobs:
   backup:
@@ -39,13 +31,17 @@ jobs:
         env:
           RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
         run: |
-          test -n "$RCLONE_CONF" || { echo "Thiếu secrets.RCLONE_CONF"; exit 1; }
+          set -euo pipefail
+          test -n "${RCLONE_CONF:-}" || { echo "Thiếu secrets.RCLONE_CONF"; exit 1; }
+          RCLONE_CONFIG_FILE="$RUNNER_TEMP/rclone.conf"
           echo "$RCLONE_CONF" > "$RCLONE_CONFIG_FILE"
-          echo "Rclone config written."
+          echo "Đã ghi rclone.conf vào $RCLONE_CONFIG_FILE"
+          # Xuất đường dẫn cho các bước sau
+          echo "RCLONE_CONFIG_FILE=$RCLONE_CONFIG_FILE" >> "$GITHUB_ENV"
 
       - name: Backup tất cả repo về local mirror và sync lên Drive
         env:
-          GH_PAT: ${{ secrets.GH_PAT }}     # PAT có scope: repo, read:org
+          GH_PAT: ${{ secrets.GH_PAT }}   # PAT: repo, read:org
         run: |
           set -euo pipefail
           test -n "${GH_PAT:-}" || { echo "Thiếu secrets.GH_PAT"; exit 1; }
@@ -56,7 +52,6 @@ jobs:
 
           IFS=',' read -ra owners <<< "$OWNERS"
 
-          # Hàm gọi GitHub API & phân trang
           gh_api() { # $1 = owner
             local o="$1"
             local otype
@@ -67,7 +62,7 @@ jobs:
             else
               base="https://api.github.com/users/$o/repos"
             fi
-            local page=1
+            local page=1 data
             while :; do
               local url="${base}?per_page=100&type=all&page=${page}"
               data=$(curl -fsSL -H "Authorization: token $GH_PAT" "$url")
@@ -89,9 +84,7 @@ jobs:
             ' | while IFS=$'\t' read -r name clone_url login; do
               repo_dir="$MIRROR_ROOT/$login/${name}.git"
               mkdir -p "$(dirname "$repo_dir")"
-              # Dùng PAT trong URL để clone private repo
               auth_url="${clone_url/https:\/\//https:\/\/${GH_PAT}@}"
-
               if [[ ! -d "$repo_dir" ]]; then
                 echo "  [+] clone --mirror $login/$name"
                 git clone --mirror --quiet "$auth_url" "$repo_dir"
@@ -100,7 +93,6 @@ jobs:
                 git -C "$repo_dir" remote set-url origin "$auth_url" || true
                 git -C "$repo_dir" fetch --all --prune --tags --quiet
               fi
-
               if [[ "${WITH_LFS}" == "true" ]]; then
                 git -C "$repo_dir" lfs fetch --all || true
               fi
@@ -109,7 +101,8 @@ jobs:
             done
           done
 
-          export RCLONE_CONFIG="$RCLONE_CONFIG_FILE"
+          # Dùng file rclone.conf đã ghi ở bước trước
+          export RCLONE_CONFIG="${RCLONE_CONFIG_FILE:?}"
           STAMP="$(date -u +%F-%H%M%S)"
           rclone sync "$MIRROR_ROOT" "${DRIVE_DEST}/current" \
             --backup-dir "${DRIVE_DEST}/versions/${STAMP}" \
@@ -117,4 +110,4 @@ jobs:
 
       - name: Dọn dẹp
         if: always()
-        run: rm -f "$RCLONE_CONFIG_FILE"
+        run: rm -f "${RCLONE_CONFIG_FILE:-}"
