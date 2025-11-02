@@ -223,7 +223,7 @@ jobs:
             aws --version
           fi
 
-      - name: Upload per-repo zips to S3 (overwrite old) # UPDATED
+      - name: Upload per-repo zips to S3 (overwrite old) # UPDATED FIXED
         run: |
           set -euo pipefail
           ACCOUNT_NAME=$(echo "${{ github.actor }}" | tr '[:upper:]' '[:lower:]')
@@ -236,31 +236,22 @@ jobs:
             echo "Added https:// to endpoint: ${ENDPOINT_URL}"
           fi
       
-          # 🧹 Xóa nội dung cũ (nếu có) trong thư mục latest/
+          # 🧹 Xóa nội dung cũ trong thư mục "latest/"
           echo "Deleting old backup files in latest/..."
           aws s3 rm "s3://${S3_PATH}" --recursive --endpoint-url="${ENDPOINT_URL}" || true
       
-          # 📦 Upload từng file zip mới
-          shopt -s nullglob
-          for z in archives/*.zip; do
-            BN="$(basename "$z")"
-            REPO="${BN#${{ env.BACKUP_NAME }}_}"; REPO="${REPO%_${{ env.BACKUP_TIMESTAMP }}.zip}"
-            echo "Uploading $BN ..."
-            aws s3 cp "$z" "s3://${S3_PATH}${BN}" \
-              --endpoint-url="${ENDPOINT_URL}" \
-              --storage-class="${{ secrets.S3_STORAGE_CLASS || 'STANDARD' }}" \
-              --metadata "backup-tool=gickup,backup-date=${{ env.BACKUP_TIMESTAMP }},repo=${REPO}" \
-              --acl private --exact-timestamps --no-progress
-          done
-      
-          # 📜 Upload MANIFEST.json
-          aws s3 cp "archives/MANIFEST.json" "s3://${S3_PATH}MANIFEST.json" \
+          # 📦 Đồng bộ toàn bộ thư mục archives lên S3 (ghi đè hoàn toàn)
+          echo "Syncing new archives..."
+          aws s3 sync archives/ "s3://${S3_PATH}" \
             --endpoint-url="${ENDPOINT_URL}" \
             --storage-class="${{ secrets.S3_STORAGE_CLASS || 'STANDARD' }}" \
-            --metadata "type=manifest,backup-date=${{ env.BACKUP_TIMESTAMP }},repo-count=${{ env.REPO_COUNT }}" \
-            --acl private --exact-timestamps --no-progress
+            --acl private \
+            --delete \
+            --no-progress
       
+          echo "✅ Upload completed — old backups replaced with latest version."
           echo "S3_URL_BASE=s3://${S3_PATH}" >> $GITHUB_ENV
+
 
 
       - name: Verify upload and list S3 objects # NEW
