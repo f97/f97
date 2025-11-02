@@ -223,39 +223,45 @@ jobs:
             aws --version
           fi
 
-      - name: Upload per-repo zips to S3 # NEW
+      - name: Upload per-repo zips to S3 (overwrite old) # UPDATED
         run: |
           set -euo pipefail
           ACCOUNT_NAME=$(echo "${{ github.actor }}" | tr '[:upper:]' '[:lower:]')
-          S3_PATH="${{ secrets.S3_BUCKET }}/${{ secrets.S3_PREFIX || 'gickup-backups' }}/${ACCOUNT_NAME}/$(date +%Y)/$(date +%m)/${{ env.BACKUP_TIMESTAMP }}/"
-          echo "Uploading to: s3://${S3_PATH}"
-
+          S3_PATH="${{ secrets.S3_BUCKET }}/${{ secrets.S3_PREFIX || 'gickup-backups' }}/${ACCOUNT_NAME}/latest/"
+          echo "Uploading (overwrite mode) to: s3://${S3_PATH}"
+      
           ENDPOINT_URL="${{ secrets.S3_ENDPOINT }}"
           if [[ ! "$ENDPOINT_URL" =~ ^https?:// ]]; then
             ENDPOINT_URL="https://${ENDPOINT_URL}"
             echo "Added https:// to endpoint: ${ENDPOINT_URL}"
           fi
-
-          # Upload từng file để set metadata theo repo
+      
+          # 🧹 Xóa nội dung cũ (nếu có) trong thư mục latest/
+          echo "Deleting old backup files in latest/..."
+          aws s3 rm "s3://${S3_PATH}" --recursive --endpoint-url="${ENDPOINT_URL}" || true
+      
+          # 📦 Upload từng file zip mới
           shopt -s nullglob
           for z in archives/*.zip; do
             BN="$(basename "$z")"
-            # Trích repo từ tên file: backupname_REPO_timestamp.zip
             REPO="${BN#${{ env.BACKUP_NAME }}_}"; REPO="${REPO%_${{ env.BACKUP_TIMESTAMP }}.zip}"
             echo "Uploading $BN ..."
-            aws s3 cp "$z" "s3://${S3_PATH}" \
+            aws s3 cp "$z" "s3://${S3_PATH}${BN}" \
               --endpoint-url="${ENDPOINT_URL}" \
               --storage-class="${{ secrets.S3_STORAGE_CLASS || 'STANDARD' }}" \
-              --metadata "backup-tool=gickup,backup-date=${{ env.BACKUP_TIMESTAMP }},repo=${REPO}"
+              --metadata "backup-tool=gickup,backup-date=${{ env.BACKUP_TIMESTAMP }},repo=${REPO}" \
+              --acl private --exact-timestamps --no-progress
           done
-
-          # Upload kèm MANIFEST & metadata tổng hợp
-          aws s3 cp "archives/MANIFEST.json" "s3://${S3_PATH}" \
+      
+          # 📜 Upload MANIFEST.json
+          aws s3 cp "archives/MANIFEST.json" "s3://${S3_PATH}MANIFEST.json" \
             --endpoint-url="${ENDPOINT_URL}" \
             --storage-class="${{ secrets.S3_STORAGE_CLASS || 'STANDARD' }}" \
-            --metadata "type=manifest,backup-date=${{ env.BACKUP_TIMESTAMP }},repo-count=${{ env.REPO_COUNT }}"
-
+            --metadata "type=manifest,backup-date=${{ env.BACKUP_TIMESTAMP }},repo-count=${{ env.REPO_COUNT }}" \
+            --acl private --exact-timestamps --no-progress
+      
           echo "S3_URL_BASE=s3://${S3_PATH}" >> $GITHUB_ENV
+
 
       - name: Verify upload and list S3 objects # NEW
         run: |
