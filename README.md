@@ -18,3 +18,5 @@ Here are some of the technologies and tools I work with:
 
 **Others:**
 - RESTful APIs, GraphQL, CI/CD,...
+
+{{ wakatimeDoubleCategoryBar "💾 Languages:" wakatimeData.Languages "💼 Projects:" wakatimeData.Projects 5 }}
