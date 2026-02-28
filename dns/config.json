@@ -152,8 +152,8 @@
       ]
     },
     {
-      "name": "Disconnect Simple Tracking",
-      "source": "https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt",
+      "name": "Shadow Whisperer Tracking",
+      "source": "https://raw.githubusercontent.com/ShadowWhisperer/BlockLists/master/Lists/Tracking",
       "type": "hosts",
       "transformations": [
         "RemoveComments",
