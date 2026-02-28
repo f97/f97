@@ -5,6 +5,6 @@
     "build:dns": "hostlist-compiler -c ./dns/config.json -o ./dns/dns-filters.txt"
   },
   "devDependencies": {
-    "@adguard/hostlist-compiler": "^1.0.29"
+    "@adguard/hostlist-compiler": "^1.0.39"
   }
 }
